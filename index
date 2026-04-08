@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>Mini-Orkut</title>
+    <style>
+      body {
+        background-color: #f0f2f5;
+        font-family: Arial, sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding-top: 50px;
+        gap: 20px;
+      }
+      
+      /* Uma classe mágica para esconder coisas da tela */
+      .escondido {
+        display: none !important;
+      }
+
+      /* Tela de Login */
+      .tela-login {
+        background-color: white;
+        padding: 40px;
+        border-radius: 10px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        text-align: center;
+      }
+
+      .btn-google {
+        background-color: #4285F4;
+        color: white;
+        border: none;
+        padding: 15px 20px;
+        border-radius: 5px;
+        font-size: 16px;
+        cursor: pointer;
+        font-weight: bold;
+      }
+
+      /* Container Principal do App (Perfil + Mural) */
+      .app-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 20px;
+      }
+
+      .perfil-card {
+        background-color: white;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        text-align: center;
+        width: 300px;
+      }
+
+      .perfil-card img {
+        border-radius: 50%;
+        width: 150px;
+        height: 150px;
+        object-fit: cover;
+      }
+
+      .btn-sair {
+        background-color: #dc3545;
+        color: white;
+        border: none;
+        padding: 5px 10px;
+        border-radius: 5px;
+        cursor: pointer;
+        margin-top: 10px;
+      }
+
+      .mural-card {
+        background-color: white;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        width: 400px;
+      }
+
+      textarea {
+        width: 100%;
+        height: 60px;
+        margin-bottom: 10px;
+        border-radius: 5px;
+        border: 1px solid #ccc;
+        padding: 10px;
+        font-family: Arial, sans-serif;
+        box-sizing: border-box;
+      }
+
+      button {
+        background-color: #0056b3;
+        color: white;
+        border: none;
+        padding: 10px 15px;
+        border-radius: 5px;
+        cursor: pointer;
+        width: 100%;
+        font-weight: bold;
+      }
+
+      /* Agora o recado tem espaço para a foto da pessoa */
+      .recado {
+        background-color: #f9f9f9;
+        padding: 10px;
+        margin-top: 20px;
+        border-left: 4px solid #0056b3;
+        display: flex; /* Organiza foto e texto lado a lado */
+        gap: 15px;
+        align-items: center;
+      }
+
+      .recado img {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+      }
+    </style>
+  </head>
+  <body>
+
+    <div id="tela-login" class="tela-login">
+      <h1>Bem-vindo ao Mini-Orkut</h1>
+      <p>Faça login para ver a comunidade.</p>
+      <button id="btn-login-google" class="btn-google">Entrar com o Google</button>
+    </div>
+
+    <div id="app-principal" class="app-container escondido">
+      
+      <div class="perfil-card">
+        <h1>Meu Perfil</h1>
+        <img id="foto-perfil" src="" alt="Minha Foto">
+        <p><strong>Nome:</strong> <span id="nome-perfil"></span></p>
+        <p><strong>Status:</strong> Construindo minha primeira rede social!</p>
+        <button id="btn-sair" class="btn-sair">Sair da Conta</button>
+      </div>
+
+      <div class="mural-card">
+        <h2>Scrapbook</h2>
+        <textarea id="campo-recado" placeholder="Deixe um recado..."></textarea>
+        <button id="botao-enviar">Enviar Recado</button>
+        <div id="lista-recados"></div>
+      </div>
+
+    </div>
+
+    <script type="module">
+// ... (mantenha as suas importações e a configuração do firebaseConfig lá no topo)
+
+// IMPORTANTE: Adicionei 'deleteDoc' e 'doc' na lista de funções do firestore lá em cima
+import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
+
+// ... (mantenha a inicialização do app, auth e bancoDeDados)
+
+// AÇÃO: Enviar um Recado (Mantemos igual, mas agora salvamos o ID do autor)
+botaoEnviar.addEventListener('click', async function() {
+  const textoDigitado = campoRecado.value;
+  if (textoDigitado === '' || !usuarioLogado) return; 
+
+  await addDoc(gavetaRecados, {
+    nome: usuarioLogado.displayName,
+    foto: usuarioLogado.photoURL,
+    uid: usuarioLogado.uid, // Salvamos o CPF único do Google para saber que foi VOCÊ quem postou
+    texto: textoDigitado,
+    dataHora: Date.now()
+  });
+
+  campoRecado.value = ''; 
+});
+
+// FUNÇÃO NOVA: Deletar Recado
+window.deletarRecado = async function(idDoRecado) {
+  if (confirm("Tem certeza que deseja excluir este recado?")) {
+    const referenciaDoRecado = doc(bancoDeDados, "recados", idDoRecado);
+    await deleteDoc(referenciaDoRecado);
+  }
+}
+
+// OUVIR MURAL: Atualizado para mostrar o botão de excluir
+const regraDeBusca = query(gavetaRecados, orderBy("dataHora", "desc"));
+onSnapshot(regraDeBusca, (resultado) => {
+  listaRecados.innerHTML = ''; 
+
+  resultado.forEach((documento) => {
+    const recado = documento.data();
+    const id = documento.id; // Pegamos o ID único gerado pelo Firebase
+    
+    const fotoParaMostrar = recado.foto ? recado.foto : "https://via.placeholder.com/40";
+
+    // LÓGICA DE ADMIN: Só mostra o botão se o recado for meu (ou se eu for o dono da rede)
+    let botaoExcluir = '';
+    if (usuarioLogado && (recado.uid === usuarioLogado.uid)) {
+      botaoExcluir = `<button onclick="deletarRecado('${id}')" style="background: none; color: red; width: auto; font-size: 12px; padding: 0; margin-top: 5px;">[Excluir]</button>`;
+    }
+
+    listaRecados.innerHTML += `
+      <div class="recado">
+        <img src="${fotoParaMostrar}" alt="Foto">
+        <div style="flex: 1;">
+          <p style="margin: 0;"><strong>${recado.nome}</strong></p>
+          <p style="margin: 5px 0 0 0;">${recado.texto}</p>
+          ${botaoExcluir}
+        </div>
+      </div>
+    `;
+  });
+});
+    </script>
+  </body>
+</html>
