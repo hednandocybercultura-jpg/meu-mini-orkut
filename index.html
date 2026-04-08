@@ -149,119 +149,66 @@
     </div>
 
     <script type="module">
-      import { initializeApp } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-app.js";
-      import { getFirestore, collection, addDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
-      // IMPORT NOVO: As ferramentas de Login do Firebase
-      import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-auth.js";
+// ... (mantenha as suas importações e a configuração do firebaseConfig lá no topo)
 
-      const firebaseConfig = {
-        apiKey: "AIzaSyDKA5A8Xp93HMnsXkWwioMtJGrvXtZZpVU",
-        authDomain: "mini-365cd.firebaseapp.com",
-        projectId: "mini-365cd",
-        storageBucket: "mini-365cd.firebasestorage.app",
-        messagingSenderId: "790691244828",
-        appId: "1:790691244828:web:db1ac4c74a8c7fa11568d9"
-      };
+// IMPORTANTE: Adicionei 'deleteDoc' e 'doc' na lista de funções do firestore lá em cima
+import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
 
-      const app = initializeApp(firebaseConfig);
-      const bancoDeDados = getFirestore(app);
-      
-      // Ligando o motor de Autenticação
-      const auth = getAuth(app);
-      const provedorGoogle = new GoogleAuthProvider();
+// ... (mantenha a inicialização do app, auth e bancoDeDados)
 
-      // Referências da Tela
-      const telaLogin = document.getElementById('tela-login');
-      const appPrincipal = document.getElementById('app-principal');
-      const btnLoginGoogle = document.getElementById('btn-login-google');
-      const btnSair = document.getElementById('btn-sair');
-      
-      const fotoPerfil = document.getElementById('foto-perfil');
-      const nomePerfil = document.getElementById('nome-perfil');
-      
-      const campoRecado = document.getElementById('campo-recado');
-      const botaoEnviar = document.getElementById('botao-enviar');
-      const listaRecados = document.getElementById('lista-recados');
+// AÇÃO: Enviar um Recado (Mantemos igual, mas agora salvamos o ID do autor)
+botaoEnviar.addEventListener('click', async function() {
+  const textoDigitado = campoRecado.value;
+  if (textoDigitado === '' || !usuarioLogado) return; 
 
-      const gavetaRecados = collection(bancoDeDados, "recados");
+  await addDoc(gavetaRecados, {
+    nome: usuarioLogado.displayName,
+    foto: usuarioLogado.photoURL,
+    uid: usuarioLogado.uid, // Salvamos o CPF único do Google para saber que foi VOCÊ quem postou
+    texto: textoDigitado,
+    dataHora: Date.now()
+  });
 
-      // Variável para lembrar quem está usando a página agora
-      let usuarioLogado = null;
+  campoRecado.value = ''; 
+});
 
-      // AÇÃO: Clicar em Entrar
-      btnLoginGoogle.addEventListener('click', async () => {
-        try {
-          await signInWithPopup(auth, provedorGoogle);
-        } catch (erro) {
-          console.error("Erro ao fazer login:", erro);
-        }
-      });
+// FUNÇÃO NOVA: Deletar Recado
+window.deletarRecado = async function(idDoRecado) {
+  if (confirm("Tem certeza que deseja excluir este recado?")) {
+    const referenciaDoRecado = doc(bancoDeDados, "recados", idDoRecado);
+    await deleteDoc(referenciaDoRecado);
+  }
+}
 
-      // AÇÃO: Clicar em Sair
-      btnSair.addEventListener('click', () => {
-        signOut(auth);
-      });
+// OUVIR MURAL: Atualizado para mostrar o botão de excluir
+const regraDeBusca = query(gavetaRecados, orderBy("dataHora", "desc"));
+onSnapshot(regraDeBusca, (resultado) => {
+  listaRecados.innerHTML = ''; 
 
-      // O VIGIA DE SESSÃO: Fica monitorando se a pessoa entrou ou saiu
-      onAuthStateChanged(auth, (user) => {
-        if (user) {
-          // A pessoa está logada!
-          usuarioLogado = user;
-          
-          // Preenche o perfil com os dados reais do Google
-          nomePerfil.innerText = user.displayName;
-          fotoPerfil.src = user.photoURL;
+  resultado.forEach((documento) => {
+    const recado = documento.data();
+    const id = documento.id; // Pegamos o ID único gerado pelo Firebase
+    
+    const fotoParaMostrar = recado.foto ? recado.foto : "https://via.placeholder.com/40";
 
-          // Esconde o login e mostra o App
-          telaLogin.classList.add('escondido');
-          appPrincipal.classList.remove('escondido');
-        } else {
-          // A pessoa saiu (ou não entrou ainda)
-          usuarioLogado = null;
-          
-          // Mostra o login e esconde o App
-          telaLogin.classList.remove('escondido');
-          appPrincipal.classList.add('escondido');
-        }
-      });
+    // LÓGICA DE ADMIN: Só mostra o botão se o recado for meu (ou se eu for o dono da rede)
+    let botaoExcluir = '';
+    if (usuarioLogado && (recado.uid === usuarioLogado.uid)) {
+      botaoExcluir = `<button onclick="deletarRecado('${id}')" style="background: none; color: red; width: auto; font-size: 12px; padding: 0; margin-top: 5px;">[Excluir]</button>`;
+    }
 
-      // AÇÃO: Enviar um Recado (agora usando os dados reais!)
-      botaoEnviar.addEventListener('click', async function() {
-        const textoDigitado = campoRecado.value;
-        if (textoDigitado === '' || !usuarioLogado) return; 
-
-        await addDoc(gavetaRecados, {
-          nome: usuarioLogado.displayName,
-          foto: usuarioLogado.photoURL, // Salva o link da foto da pessoa!
-          texto: textoDigitado,
-          dataHora: Date.now()
-        });
-
-        campoRecado.value = ''; 
-      });
-
-      // OUVIR MURAL: Agora puxa e mostra a foto no HTML
-      const regraDeBusca = query(gavetaRecados, orderBy("dataHora", "desc"));
-      onSnapshot(regraDeBusca, (resultado) => {
-        listaRecados.innerHTML = ''; 
-
-        resultado.forEach((documento) => {
-          const recado = documento.data();
-          
-          // Se o recado for antigo (antes do login existir), usa uma foto padrão de silhueta
-          const fotoParaMostrar = recado.foto ? recado.foto : "https://via.placeholder.com/40";
-
-          listaRecados.innerHTML += `
-            <div class="recado">
-              <img src="${fotoParaMostrar}" alt="Foto">
-              <div>
-                <p style="margin: 0;"><strong>${recado.nome}</strong></p>
-                <p style="margin: 5px 0 0 0;">${recado.texto}</p>
-              </div>
-            </div>
-          `;
-        });
-      });
+    listaRecados.innerHTML += `
+      <div class="recado">
+        <img src="${fotoParaMostrar}" alt="Foto">
+        <div style="flex: 1;">
+          <p style="margin: 0;"><strong>${recado.nome}</strong></p>
+          <p style="margin: 5px 0 0 0;">${recado.texto}</p>
+          ${botaoExcluir}
+        </div>
+      </div>
+    `;
+  });
+});
     </script>
   </body>
 </html>
